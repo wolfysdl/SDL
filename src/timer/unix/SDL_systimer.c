@@ -52,6 +52,9 @@
 #ifdef __APPLE__
 #include <mach/mach_time.h>
 #endif
+#ifdef __PS2__
+#include <timer.h>
+#endif
 
 /* Use CLOCK_MONOTONIC_RAW, if available, which is not subject to adjustment by NTP */
 #ifdef HAVE_CLOCK_GETTIME
@@ -68,6 +71,9 @@ static struct timespec start_ts;
 #elif defined(__APPLE__)
 static uint64_t start_mach;
 mach_timebase_info_data_t mach_base_info;
+#elif defined(__PS2__)
+static uint64_t start_ps2;
+static Uint64 BUSCLK_MS = (kBUSCLK / 1000);
 #endif
 static SDL_bool has_monotonic_time = SDL_FALSE;
 static struct timeval start_tv;
@@ -89,6 +95,10 @@ void SDL_TicksInit(void)
     if (mach_timebase_info(&mach_base_info) == 0) {
         has_monotonic_time = SDL_TRUE;
         start_mach = mach_absolute_time();
+    } else
+#elif defined(__PS2__)
+    if (GetTimerSystemTime() == 0) {
+        has_monotonic_time = SDL_TRUE;
     } else
 #endif
     {
@@ -115,6 +125,9 @@ Uint64 SDL_GetTicks64(void)
 #elif defined(__APPLE__)
         const uint64_t now = mach_absolute_time();
         return (((now - start_mach) * mach_base_info.numer) / mach_base_info.denom) / 1000000;
+#elif defined(__PS2__)
+        uint64_t now = GetTimerSystemTime();
+        return (Uint64)((now - start_ps2) / BUSCLK_MS);
 #else
         SDL_assert(SDL_FALSE);
         return 0;
@@ -143,6 +156,8 @@ Uint64 SDL_GetPerformanceCounter(void)
         ticks += now.tv_nsec;
 #elif defined(__APPLE__)
         ticks = mach_absolute_time();
+#elif defined(__PS2__)
+        ticks = SDL_GetTicks64();
 #else
         SDL_assert(SDL_FALSE);
         ticks = 0;
@@ -167,6 +182,8 @@ Uint64 SDL_GetPerformanceFrequency(void)
     if (has_monotonic_time) {
 #ifdef HAVE_CLOCK_GETTIME
         return 1000000000;
+#elif defined(__PS2__)
+        return 1000;
 #elif defined(__APPLE__)
         Uint64 freq = mach_base_info.denom;
         freq *= 1000000000;
